@@ -108,6 +108,7 @@ public:
 	void set_rtl_altitude(const float altitude_m);
 	void set_height_source(HeightSource height_source);
 	void set_rc_loss_exception(RcLossException mask);
+	void set_param_vt_fwd_thrust_en(int value);
 	void arm();
 	void takeoff();
 	void land();
@@ -140,6 +141,10 @@ public:
 	void start_checking_altitude(const float max_deviation_m);
 	void stop_checking_altitude();
 	void check_current_altitude(float target_rel_altitude_m, float max_distance_m = 1.5f);
+
+	void enable_fixedwing_mectrics();
+	void check_airspeed_is_valid();
+	void check_airspeed_is_invalid();
 
 	// Blocking call to get the drone's current position in NED frame
 	std::array<float, 3> get_current_position_ned();
