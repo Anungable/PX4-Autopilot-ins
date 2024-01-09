@@ -95,7 +95,7 @@ LeddarOne::crc16_calc(const unsigned char *data_frame, const uint8_t crc16_lengt
 int
 LeddarOne::collect()
 {
-	perf_begin(_sample_perf);
+	perf_begin(_sample_perf); //performance counter
 
 	const int buffer_size = sizeof(_buffer);
 	const int message_size = sizeof(reading_msg);
@@ -219,9 +219,10 @@ LeddarOne::open_serial_port(const speed_t speed)
 		return PX4_ERROR;
 	}
 
+	// 初始化UART
 	termios uart_config = {};
 
-	// Store the current port configuration. attributes.
+	// Store the current port configuration. attributes. using termios structure
 	if (tcgetattr(_file_descriptor, &uart_config)) {
 		PX4_ERR("Unable to get termios from %s.", _serial_port);
 		::close(_file_descriptor);
@@ -268,7 +269,7 @@ LeddarOne::open_serial_port(const speed_t speed)
 		return PX4_ERROR;
 	}
 
-	// Flush the hardware buffers.
+	// Flush the hardware buffers.輸入暫存，已寫入但尚未發送
 	tcflush(_file_descriptor, TCIOFLUSH);
 
 	PX4_DEBUG("opened UART port %s", _serial_port);

@@ -57,7 +57,7 @@ const char *parser_state[] = {
 	"6_GOT_CARRIAGE_RETURN"
 };
 #endif
-
+//param: readbuf[i], _linebuf, &_linebuf_index, &_parse_state, &distance_m
 int lightware_parser(char c, char *parserbuf, unsigned *parserbuf_index, enum LW_PARSE_STATE *state, float *dist)
 {
 	int ret = -1;
