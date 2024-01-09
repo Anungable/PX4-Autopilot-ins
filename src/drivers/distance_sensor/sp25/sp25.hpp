@@ -88,16 +88,16 @@ public:
 
 	int 				init();
 	void 				print_info();
-
-
-private:
 	void				start();
 	void				stop();
+
+private:
+
 	void				Run() override;
 	int				measure();
 	int				collect();
 
-	int				SP25_parser( sp25_package *sp25_pack, uint8_t byte);
+	int				SP25_parser( struct sp25_package *sp25_pack, uint8_t byte);
 
 	char 				_port[20] {};
 	int         		        _interval{100000};

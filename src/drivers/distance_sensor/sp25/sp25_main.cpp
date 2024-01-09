@@ -41,7 +41,7 @@ namespace SP_25
 
 SP25 *g_dev{nullptr};
 
-static int start(const char *port, const uint8_t rotation)
+static int Start(const char *port, const uint8_t rotation)
 {
 	if (g_dev != nullptr) {
 		PX4_ERR("already started");
@@ -81,7 +81,7 @@ static int status()
 	return PX4_OK;
 }
 
-static int stop()
+static int Stop()
 {
 	if (g_dev != nullptr) {
 		delete g_dev;
@@ -128,7 +128,7 @@ extern "C" __EXPORT int SP25_main(int argc, char *argv[])
 	int myoptind = 1;
 
 	const char *port = nullptr;
-	uint8_t rotation = distance_sensor_s::ROTATION_FRONTWARD_FACING;
+	uint8_t rotation = distance_sensor_s::ROTATION_DOWNWARD_FACING;
 
 	while ((ch = px4_getopt(argc, argv, "d:r", &myoptind, &myoptarg)) != EOF) {
 		switch (ch) {
@@ -151,13 +151,13 @@ extern "C" __EXPORT int SP25_main(int argc, char *argv[])
 	}
 
 	if (!strcmp(argv[myoptind], "start")) {
-		return SP_25::start(port, rotation);
+		return SP_25::Start(port, rotation);
 
 	} else if (!strcmp(argv[myoptind], "status")) {
 		return SP_25::status();
 
 	} else if (!strcmp(argv[myoptind], "stop")) {
-		return SP_25::stop();
+		return SP_25::Stop();
 	}
 
 	return SP_25::usage();

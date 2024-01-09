@@ -40,6 +40,7 @@
 #include <stdlib.h>
 
 #define SP25_TAKE_RANGE_REG		'd'
+sp25_package *sp25_pack {nullptr};
 
 SP25::SP25(const char *port, uint8_t rotation) :
 	ScheduledWorkItem(MODULE_NAME, px4::serial_port_to_wq(port)),
@@ -138,12 +139,8 @@ int SP25::collect()
 	uint8_t byte;
 
 	for (uint8_t decode_cnt = 0; decode_cnt < 5; decode_cnt++) {
-		// Check for overflow
-		// if (_linebuf_index >= sizeof(_linebuf)) {
-		// 	_parse_state = START_SEQ;
-		// }
 
-		if (OK == SP25_parser(&SP25_package, byte)) {
+		if (OK == SP25_parser(sp25_pack, byte)) {
 			valid = true;
 		}
 	}
@@ -173,7 +170,7 @@ void SP25::stop()
 
 void SP25::Run()
 {
-	sp25_package *sp25_pack {nullptr};
+
 	if (_fd > 0) {
 		// PX4_INFO("serial port already open");
 		return;
@@ -268,7 +265,7 @@ void SP25::print_info()
 	perf_print_counter(_comms_errors);
 }
 
-int SP25_parser( sp25_package *sp25_pack, uint8_t byte)
+int SP25_parser( struct sp25_package *sp25_pack, uint8_t byte)
 {
 	static uint8_t count = 0;		     //iterate through bits
 	static uint8_t msg_upper = 0, msg_lower = 0; //msg id low and high bytes
@@ -291,7 +288,7 @@ int SP25_parser( sp25_package *sp25_pack, uint8_t byte)
 			if (byte == SP25_HEADER)
 			{
 				count = 0;
-				decode_state = MSG_ID;
+				state = MSG_ID;
 			}
 		}
 		break;
@@ -310,19 +307,19 @@ int SP25_parser( sp25_package *sp25_pack, uint8_t byte)
 			msg_info = msg_upper + msg_lower * 256;
 			if (msg_info == SP25_SENSOR_STATUS)
 			{
-				decode_state = msg_sensor_status;
+				state = msg_sensor_status;
 			}
 			else if (msg_info == SP25_TARGET_STATUS)
 			{
-				decode_state = msg_target_status;
+				state = msg_target_status;
 			}
 			else if (msg_info == SP25_TARGET_INFO)
 			{
-				decode_state = msg_target_info;
+				state = msg_target_info;
 			}
 			else
 			{
-				decode_state = start_seq;
+				state = start_seq;
 			}
 		}
 		break;
@@ -333,10 +330,10 @@ int SP25_parser( sp25_package *sp25_pack, uint8_t byte)
 		{
 			if(is_targ_sensor_update)
 			{
-				sp25_pack->pack_type = pack_info;
+				//sp25_pack->pack_type = pack_info;
 				sp25_pack->range = 30.0f;
 			}
-			decode_state = end_seq;
+			state = end_seq;
 			count = 0;
 			is_targ_sensor_update = true;
 		}
@@ -348,7 +345,7 @@ int SP25_parser( sp25_package *sp25_pack, uint8_t byte)
 		{ }
 		else if (count == SP25_PACKET_NUM)
 		{
-			decode_state = end_seq;
+			state = end_seq;
 			count = 0;
 		}
 		break;
@@ -388,10 +385,10 @@ int SP25_parser( sp25_package *sp25_pack, uint8_t byte)
 		else if (count == SP25_PACKET_NUM) //信噪比
 		{
 			is_targ_sensor_update = false; //one cycle, clear
-			sp25_pack->latest_pack_time = HAL_GetTick();
+			//sp25_pack->latest_pack_time = HAL_GetTick();
 			sp25_pack->snr = byte - 127;
-			decode_state = end_seq;
-			sp25_pack->pack_type = pack_info; //pilot2_Limeca_0179, 確認有收到資料
+			state = end_seq;
+			//sp25_pack->pack_type = pack_info; //pilot2_Limeca_0179, 確認有收到資料
 			count = 0;
 		}
 		break;
@@ -406,7 +403,7 @@ int SP25_parser( sp25_package *sp25_pack, uint8_t byte)
 			else
 			{
 				count = 0;
-				decode_state = start_seq;
+				state = start_seq;
 				is_sp25_ready = false;
 				sp25_pack->pack_type = pack_none;
 			}
@@ -429,7 +426,7 @@ int SP25_parser( sp25_package *sp25_pack, uint8_t byte)
 				sp25_pack->pack_type = pack_none;
 			}
 			count = 0;
-			decode_state = start_seq;
+			state = start_seq;
 		}
 		break;
 	}
