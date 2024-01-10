@@ -157,13 +157,13 @@ LeddarOne::init()
 		return PX4_ERROR;
 	}
 
-	hrt_abstime time_now = hrt_absolute_time();
+	hrt_abstime time_now = hrt_absolute_time(); //ms
 
 	const hrt_abstime timeout_usec = time_now + 500000_us; // 0.5sec
 
 	while (time_now < timeout_usec) {
 		if (measure() == PX4_OK) {
-			px4_usleep(LEDDAR_ONE_MEASURE_INTERVAL);
+			px4_usleep(LEDDAR_ONE_MEASURE_INTERVAL); // 0.1sec
 
 			if (collect() == PX4_OK) {
 				// The file descriptor can only be accessed by the process that opened it,
@@ -173,7 +173,7 @@ LeddarOne::init()
 			}
 		}
 
-		px4_usleep(1000);
+		px4_usleep(1000); //0.001sec
 		time_now = hrt_absolute_time();
 	}
 
@@ -184,9 +184,10 @@ LeddarOne::init()
 int
 LeddarOne::measure()
 {
-	// Flush the receive buffer.
+	// Flush the receive buffer. 清空暫存
 	tcflush(_file_descriptor, TCIFLUSH);
 
+	//request_reading_msg寫入fd
 	int num_bytes = ::write(_file_descriptor, request_reading_msg, sizeof(request_reading_msg));
 
 	if (num_bytes != sizeof(request_reading_msg)) {

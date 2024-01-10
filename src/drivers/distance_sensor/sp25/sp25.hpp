@@ -61,7 +61,7 @@ using namespace time_literals;
 #define SP25_SENSOR_STATUS	0x60A	//OUTPUT
 #define SP25_TARGET_STATUS	0x70B	//OUTPUT
 #define SP25_TARGET_INFO	0x70C
-
+#define SP25_PACKET_NUM		8
 enum SP25_PARSE_STATE {
 	START_SEQ = 0,
 	MSG_ID,
@@ -70,13 +70,21 @@ enum SP25_PARSE_STATE {
 	MSG_TARGET_INFO,
 	END_SEQ
 };
+enum sp25_pack_type_en {
+	pack_none = 0,
+	pack_info
+};
+
 struct sp25_package {
 	float range;
 	float vel;
+	uint32_t latest_pack_time;
+	bool is_alive;
+	bool is_info_ready;
 	uint8_t size;
-	uint8_t snr; //signal noise ratio
+	uint8_t snr;
+	uint8_t pack_type;
 };
-
 /*8 bytes payload with _uint8 type*/
 /*message ID byte 2 is low byte and byte 3 is high byte*/
 
@@ -97,7 +105,7 @@ private:
 	int				measure();
 	int				collect();
 
-	int				SP25_parser( struct sp25_package *sp25_pack, uint8_t byte);
+	int				SP25_parser(sp25_package &sp25_pack, uint8_t byte);
 
 	char 				_port[20] {};
 	int         		        _interval{100000};

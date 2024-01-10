@@ -40,8 +40,6 @@
 #include <stdlib.h>
 
 #define SP25_TAKE_RANGE_REG		'd'
-sp25_package *sp25_pack {nullptr};
-
 SP25::SP25(const char *port, uint8_t rotation) :
 	ScheduledWorkItem(MODULE_NAME, px4::serial_port_to_wq(port)),
 	_px4_rangefinder(0, rotation),
@@ -136,8 +134,8 @@ int SP25::collect()
 
 	bool valid = false;
 	float distance_m = -1.0f;
-	uint8_t byte;
-
+	uint8_t byte = 0;
+	sp25_package sp25_pack;
 	for (uint8_t decode_cnt = 0; decode_cnt < 5; decode_cnt++) {
 
 		if (OK == SP25_parser(sp25_pack, byte)) {
@@ -265,14 +263,26 @@ void SP25::print_info()
 	perf_print_counter(_comms_errors);
 }
 
-int SP25_parser( struct sp25_package *sp25_pack, uint8_t byte)
+/**
+ * @brief SP25 message decoder
+ *
+ * @param sp25_pack data handle structure
+ * @param byte received data
+ * @return int 0 if success, otherwise -1
+ */
+int SP25_parser(sp25_package &sp25_pack, uint8_t byte)
 {
+	int ret = -1;
 	static uint8_t count = 0;		     //iterate through bits
 	static uint8_t msg_upper = 0, msg_lower = 0; //msg id low and high bytes
-	static uint8_t rag_upper = 0, rag_lower = 0, //range high and low bytes
+	static uint8_t rag_upper = 0, rag_lower = 0; //range high and low bytes
         static uint8_t vel_upper = 0, vel_lower = 0; //target velocity high and low 3 bits
 	static uint16_t msg_info = 0, surface_info = 0, range_info = 0;
+	static uint8_t is_target_sensor_update = false;
+	float velocity_info;
+
 	static SP25_PARSE_STATE state = START_SEQ;
+
 	switch (state) {
 	case START_SEQ: //2 bytes in total
 		if (count == 0)
@@ -281,7 +291,6 @@ int SP25_parser( struct sp25_package *sp25_pack, uint8_t byte)
 				count = 1;
 				break;
 			}
-
 		}
 		else if (count == 1)
 		{
@@ -307,19 +316,19 @@ int SP25_parser( struct sp25_package *sp25_pack, uint8_t byte)
 			msg_info = msg_upper + msg_lower * 256;
 			if (msg_info == SP25_SENSOR_STATUS)
 			{
-				state = msg_sensor_status;
+				state = MSG_SENSOR_STATUS;
 			}
 			else if (msg_info == SP25_TARGET_STATUS)
 			{
-				state = msg_target_status;
+				state = MSG_TARGET_STATUS;
 			}
 			else if (msg_info == SP25_TARGET_INFO)
 			{
-				state = msg_target_info;
+				state = MSG_TARGET_INFO;
 			}
 			else
 			{
-				state = start_seq;
+				state = START_SEQ;
 			}
 		}
 		break;
@@ -328,14 +337,13 @@ int SP25_parser( struct sp25_package *sp25_pack, uint8_t byte)
 		count++;
 		if (count == SP25_PACKET_NUM)
 		{
-			if(is_targ_sensor_update)
+			if(is_target_sensor_update)
 			{
-				//sp25_pack->pack_type = pack_info;
-				sp25_pack->range = 30.0f;
+				sp25_pack.range = 30.0f;
 			}
-			state = end_seq;
+			state = END_SEQ;
 			count = 0;
-			is_targ_sensor_update = true;
+			is_target_sensor_update = true;
 		}
 		break;
 
@@ -345,7 +353,7 @@ int SP25_parser( struct sp25_package *sp25_pack, uint8_t byte)
 		{ }
 		else if (count == SP25_PACKET_NUM)
 		{
-			state = end_seq;
+			state = END_SEQ;
 			count = 0;
 		}
 		break;
@@ -357,7 +365,7 @@ int SP25_parser( struct sp25_package *sp25_pack, uint8_t byte)
 		else if (count == 2) //反射物體截面積(upper)
 		{
 			surface_info = byte * 0.5 - 50;
-			sp25_pack->size = surface_info;
+			sp25_pack.size = surface_info;
 		}
 		else if (count == 3) //反射距離(upper)
 		{
@@ -367,7 +375,7 @@ int SP25_parser( struct sp25_package *sp25_pack, uint8_t byte)
 		{
 			rag_lower = byte;
 			range_info = (rag_upper << 8) | rag_lower;
-			sp25_pack->range = range_info * 0.01;
+			sp25_pack.range = range_info * 0.01;
 		}
 		else if (count == 5) //reserved
 		{
@@ -380,15 +388,13 @@ int SP25_parser( struct sp25_package *sp25_pack, uint8_t byte)
 		{
 			vel_lower = byte;
 			velocity_info = (vel_upper * 256 + vel_lower) * 0.05 - 35;
-			sp25_pack->vel = velocity_info;
+			sp25_pack.vel = velocity_info;
 		}
 		else if (count == SP25_PACKET_NUM) //信噪比
 		{
-			is_targ_sensor_update = false; //one cycle, clear
-			//sp25_pack->latest_pack_time = HAL_GetTick();
-			sp25_pack->snr = byte - 127;
-			state = end_seq;
-			//sp25_pack->pack_type = pack_info; //pilot2_Limeca_0179, 確認有收到資料
+			is_target_sensor_update = false;
+			sp25_pack.snr = byte - 127;
+			state = END_SEQ;
 			count = 0;
 		}
 		break;
@@ -403,9 +409,9 @@ int SP25_parser( struct sp25_package *sp25_pack, uint8_t byte)
 			else
 			{
 				count = 0;
-				state = start_seq;
-				is_sp25_ready = false;
-				sp25_pack->pack_type = pack_none;
+				state = START_SEQ;
+				//is_sp25_ready = false;
+				sp25_pack.pack_type = pack_none;
 			}
 			break;
 		}
@@ -413,20 +419,21 @@ int SP25_parser( struct sp25_package *sp25_pack, uint8_t byte)
 		{
 			if (byte == SP25_END)
 			{
-				is_sp25_ready = true;
-				if(sp25_pack->pack_type == pack_info)
+				//is_sp25_ready = true;
+				if(sp25_pack.pack_type == pack_info)
 				{
-					sp25_pack->is_info_ready = true;
+					//sp25_pack.is_info_ready = true;
+					ret = 0;
 				}
-				sp25_pack->pack_type = pack_none;
+				sp25_pack.pack_type = pack_none;
 			}
 			else
 			{
-				is_sp25_ready = false;
-				sp25_pack->pack_type = pack_none;
+				//is_sp25_ready = false;
+				sp25_pack.pack_type = pack_none;
 			}
 			count = 0;
-			state = start_seq;
+			state = START_SEQ;
 		}
 		break;
 	}
