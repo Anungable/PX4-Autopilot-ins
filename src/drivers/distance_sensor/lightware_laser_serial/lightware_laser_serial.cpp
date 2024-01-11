@@ -168,11 +168,11 @@ int LightwareLaserSerial::collect()
 
 	/* the buffer for read chars is buflen minus null termination */
 	char readbuf[sizeof(_linebuf)];
-	unsigned readlen = sizeof(readbuf) - 1;
+	unsigned readlen = sizeof(readbuf) - 1; //minus buflen null termination
 
 	/* read from the sensor (uart buffer) */
 	const hrt_abstime timestamp_sample = hrt_absolute_time();
-	int ret = ::read(_fd, &readbuf[0], readlen);
+	int ret = ::read(_fd, &readbuf[0], readlen); //read readbuf裡面前九項，回傳讀到的byte
 
 	if (ret < 0) {
 		PX4_DEBUG("read err: %d", ret);

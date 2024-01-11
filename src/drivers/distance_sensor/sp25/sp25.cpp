@@ -134,11 +134,10 @@ int SP25::collect()
 
 	bool valid = false;
 	float distance_m = -1.0f;
-	uint8_t byte = 0;
-	sp25_package sp25_pack;
-	for (uint8_t decode_cnt = 0; decode_cnt < 5; decode_cnt++) {
 
-		if (OK == SP25_parser(sp25_pack, byte)) {
+	for ( int i = 0; i < ret; i++ ) {
+		//TODO: need to check overflow
+		if (OK == SP25_parser(readbuf[i],_linebuf, &_linebuf_index)) {
 			valid = true;
 		}
 	}
@@ -146,6 +145,7 @@ int SP25::collect()
 	if (!valid) {
 		return -EAGAIN;
 	}
+	distance_m = sp25_pack.range;
 
 	//message publish
 	_px4_rangefinder.update(timestamp_sample, distance_m);
@@ -270,7 +270,7 @@ void SP25::print_info()
  * @param byte received data
  * @return int 0 if success, otherwise -1
  */
-int SP25_parser(sp25_package &sp25_pack, uint8_t byte)
+int SP25_parser(char c, char *parserbuf, unsigned *parserbuf_index)
 {
 	int ret = -1;
 	static uint8_t count = 0;		     //iterate through bits
@@ -287,14 +287,14 @@ int SP25_parser(sp25_package &sp25_pack, uint8_t byte)
 	case START_SEQ: //2 bytes in total
 		if (count == 0)
 		{
-			if (byte == SP25_HEADER) {
+			if (c == SP25_HEADER) {
 				count = 1;
 				break;
 			}
 		}
 		else if (count == 1)
 		{
-			if (byte == SP25_HEADER)
+			if (c == SP25_HEADER)
 			{
 				count = 0;
 				state = MSG_ID;
@@ -305,13 +305,13 @@ int SP25_parser(sp25_package &sp25_pack, uint8_t byte)
 	case MSG_ID: //2 bytes in total
 		if (count == 0)
 		{
-			msg_upper = byte;
+			msg_upper = c;
 			count = 1;
 			break;
 		}
 		else if (count == 1)
 		{
-			msg_lower = byte;
+			msg_lower = c;
 			count = 0;
 			msg_info = msg_upper + msg_lower * 256;
 			if (msg_info == SP25_SENSOR_STATUS)
@@ -364,16 +364,16 @@ int SP25_parser(sp25_package &sp25_pack, uint8_t byte)
 		{ }
 		else if (count == 2) //反射物體截面積(upper)
 		{
-			surface_info = byte * 0.5 - 50;
+			surface_info = c * 0.5 - 50;
 			sp25_pack.size = surface_info;
 		}
 		else if (count == 3) //反射距離(upper)
 		{
-			rag_upper = byte;
+			rag_upper = c;
 		}
 		else if (count == 4) //反射距離(lower)
 		{
-			rag_lower = byte;
+			rag_lower = c;
 			range_info = (rag_upper << 8) | rag_lower;
 			sp25_pack.range = range_info * 0.01;
 		}
@@ -382,18 +382,18 @@ int SP25_parser(sp25_package &sp25_pack, uint8_t byte)
 		}
 		else if (count == 6) //目標速度3b(upper)
 		{
-			vel_upper = (byte & 0xE0) >> 5;
+			vel_upper = (c & 0xE0) >> 5;
 		}
 		else if (count == 7) //目標速度(lower)
 		{
-			vel_lower = byte;
+			vel_lower = c;
 			velocity_info = (vel_upper * 256 + vel_lower) * 0.05 - 35;
 			sp25_pack.vel = velocity_info;
 		}
 		else if (count == SP25_PACKET_NUM) //信噪比
 		{
 			is_target_sensor_update = false;
-			sp25_pack.snr = byte - 127;
+			sp25_pack.snr = c - 127;
 			state = END_SEQ;
 			count = 0;
 		}
@@ -402,7 +402,7 @@ int SP25_parser(sp25_package &sp25_pack, uint8_t byte)
 	case END_SEQ:
 		if (count == 0)
 		{
-			if (byte == SP25_END)
+			if (c == SP25_END)
 			{
 				count = 1;
 			}
@@ -417,7 +417,7 @@ int SP25_parser(sp25_package &sp25_pack, uint8_t byte)
 		}
 		else if (count == 1)
 		{
-			if (byte == SP25_END)
+			if (c == SP25_END)
 			{
 				//is_sp25_ready = true;
 				if(sp25_pack.pack_type == pack_info)

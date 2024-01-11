@@ -31,15 +31,16 @@
 #
 ############################################################################
 px4_add_module(
-	MODULE drivers__sp25
+	MODULE drivers__distance_sensor__sp25
+	MAIN sp25
 	COMPILE_FLAGS
 		-Wno-cast-align # TODO: fix and enable
-	MAIN
-		sp25
 	SRCS
 		sp25.hpp
 		sp25.cpp
 		sp25_main.cpp
+	MODULE_CONFIG
+		module.yaml
 	DEPENDS
 		px4_work_queue
 		drivers_rangefinder

@@ -107,15 +107,15 @@ LeddarOne::collect()
 		return measure();
 	}
 
-	_buffer_len += bytes_read;
+	_buffer_len += bytes_read; //act like a counter
 
-	if (_buffer_len < message_size) {
+	if (_buffer_len < message_size) { //還沒接收完
 		// Return on next scheduled cycle to collect remaining data.
 		return PX4_OK;
 	}
 
 	reading_msg *msg {nullptr};
-	msg = (reading_msg *)_buffer;
+	msg = (reading_msg *)_buffer; //typecasting
 
 	if (msg->slave_addr != MODBUS_SLAVE_ADDRESS ||
 	    msg->function != MODBUS_READING_FUNCTION) {

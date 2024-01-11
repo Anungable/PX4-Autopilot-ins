@@ -150,7 +150,7 @@ private:
 
 	int _file_descriptor{-1};
 
-	uint8_t _buffer[sizeof(reading_msg)];
+	uint8_t _buffer[sizeof(reading_msg)]; //an array with 25 elements with uint8_t as data type
 	uint8_t _buffer_len{0};
 
 	hrt_abstime _measurement_time{0};

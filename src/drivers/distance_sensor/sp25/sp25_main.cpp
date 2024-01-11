@@ -120,7 +120,7 @@ $ SP25 stop
 
 } // namespace
 
-extern "C" __EXPORT int SP25_main(int argc, char *argv[])
+extern "C" __EXPORT int sp25_main(int argc, char *argv[])
 {
 	const char *myoptarg = nullptr;
 
@@ -128,7 +128,7 @@ extern "C" __EXPORT int SP25_main(int argc, char *argv[])
 	int myoptind = 1;
 
 	const char *port = nullptr;
-	uint8_t rotation = distance_sensor_s::ROTATION_DOWNWARD_FACING;
+	uint8_t rotation = distance_sensor_s::ROTATION_FORWARD_FACING;
 
 	while ((ch = px4_getopt(argc, argv, "d:r", &myoptind, &myoptarg)) != EOF) {
 		switch (ch) {

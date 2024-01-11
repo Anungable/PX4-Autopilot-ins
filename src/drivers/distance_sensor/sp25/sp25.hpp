@@ -85,6 +85,7 @@ struct sp25_package {
 	uint8_t snr;
 	uint8_t pack_type;
 };
+sp25_package sp25_pack;
 /*8 bytes payload with _uint8 type*/
 /*message ID byte 2 is low byte and byte 3 is high byte*/
 
@@ -105,14 +106,14 @@ private:
 	int				measure();
 	int				collect();
 
-	int				SP25_parser(sp25_package &sp25_pack, uint8_t byte);
+	int				SP25_parser(char c, char *parserbuf, unsigned *parserbuf_index);
 
 	char 				_port[20] {};
 	int         		        _interval{100000};
 	bool				_collect_phase{false};
 	PX4Rangefinder                  _px4_rangefinder;
 	int				_fd{-1};
-	char				_linebuf[10] {};
+	char				_linebuf[8] {};
 	unsigned			_linebuf_index{0};
 	enum SP25_PARSE_STATE		_parse_state{START_SEQ};
 
