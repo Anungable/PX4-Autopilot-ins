@@ -1,0 +1,6 @@
+module_name: SP25 Rangefinder
+serial_config:
+    - command: sp25 start -d ${SERIAL_DEV}
+      port_config_param:
+        name: SENS_SP25_CFG
+        group: Sensors

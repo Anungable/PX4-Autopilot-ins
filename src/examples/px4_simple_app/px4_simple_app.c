@@ -51,6 +51,7 @@
 #include <uORB/uORB.h>
 #include <uORB/topics/vehicle_acceleration.h>
 #include <uORB/topics/vehicle_attitude.h>
+#include <uORB/topics/distance_sensor.h>
 
 __EXPORT int px4_simple_app_main(int argc, char *argv[]);
 
@@ -63,14 +64,19 @@ int px4_simple_app_main(int argc, char *argv[])
 	/* limit the update rate to 5 Hz */
 	orb_set_interval(sensor_sub_fd, 200);
 
+	/* subscribe to distance sensor topic */
+	int rangefinder_sub_fd = orb_subscribe(ORB_ID(distance_sensor));
+	orb_set_interval(rangefinder_sub_fd, 200);
+
 	/* advertise attitude topic */
-	struct vehicle_attitude_s att;
-	memset(&att, 0, sizeof(att));
-	orb_advert_t att_pub = orb_advertise(ORB_ID(vehicle_attitude), &att);
+	// struct vehicle_attitude_s att;
+	// memset(&att, 0, sizeof(att));
+	// orb_advert_t att_pub = orb_advertise(ORB_ID(vehicle_attitude), &att);
 
 	/* one could wait for multiple topics with this technique, just using one here */
 	px4_pollfd_struct_t fds[] = {
-		{ .fd = sensor_sub_fd,   .events = POLLIN },
+		// { .fd = sensor_sub_fd,   .events = POLLIN },
+		{ .fd = rangefinder_sub_fd,   .events = POLLIN },
 		/* there could be more file descriptors here, in the form like:
 		 * { .fd = other_sub_fd,   .events = POLLIN },
 		 */
@@ -80,7 +86,7 @@ int px4_simple_app_main(int argc, char *argv[])
 
 	for (int i = 0; i < 5; i++) {
 		/* wait for sensor update of 1 file descriptor for 1000 ms (1 second) */
-		int poll_ret = px4_poll(fds, 1, 1000);
+		int poll_ret = px4_poll(fds, 2, 1000);
 
 		/* handle the poll result */
 		if (poll_ret == 0) {
@@ -98,24 +104,29 @@ int px4_simple_app_main(int argc, char *argv[])
 
 		} else {
 
+			// if (fds[0].revents & POLLIN) {
+			// 	/* obtained data for the first file descriptor */
+			// 	struct vehicle_acceleration_s accel;
+			// 	/* copy sensors raw data into local buffer */
+			// 	orb_copy(ORB_ID(vehicle_acceleration), sensor_sub_fd, &accel);
+			// 	PX4_INFO("Accelerometer:\t%8.4f\t%8.4f\t%8.4f",
+			// 		 (double)accel.xyz[0],
+			// 		 (double)accel.xyz[1],
+			// 		 (double)accel.xyz[2]);
+
+			// 	/* set att and publish this information for other apps
+			// 	 the following does not have any meaning, it's just an example
+			// 	*/
+			// 	att.q[0] = accel.xyz[0];
+			// 	att.q[1] = accel.xyz[1];
+			// 	att.q[2] = accel.xyz[2];
+
+			// 	orb_publish(ORB_ID(vehicle_attitude), att_pub, &att);
+			// }
 			if (fds[0].revents & POLLIN) {
-				/* obtained data for the first file descriptor */
-				struct vehicle_acceleration_s accel;
-				/* copy sensors raw data into local buffer */
-				orb_copy(ORB_ID(vehicle_acceleration), sensor_sub_fd, &accel);
-				PX4_INFO("Accelerometer:\t%8.4f\t%8.4f\t%8.4f",
-					 (double)accel.xyz[0],
-					 (double)accel.xyz[1],
-					 (double)accel.xyz[2]);
-
-				/* set att and publish this information for other apps
-				 the following does not have any meaning, it's just an example
-				*/
-				att.q[0] = accel.xyz[0];
-				att.q[1] = accel.xyz[1];
-				att.q[2] = accel.xyz[2];
-
-				orb_publish(ORB_ID(vehicle_attitude), att_pub, &att);
+				struct distance_sensor_s rangefinder;
+				orb_copy(ORB_ID(distance_sensor), rangefinder_sub_fd, &rangefinder);
+				PX4_INFO("SP25: \t%f\t%f", (double)rangefinder.min_distance, (double) rangefinder.max_distance);
 			}
 
 			/* there could be more file descriptors here, in the form like:
