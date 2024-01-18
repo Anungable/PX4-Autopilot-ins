@@ -35,6 +35,7 @@
 
 #include <lib/drivers/device/Device.hpp>
 #include <fcntl.h>
+float distance_m = -1.0f;
 
 TFMINI::TFMINI(const char *port, uint8_t rotation) :
 	ScheduledWorkItem(MODULE_NAME, px4::serial_port_to_wq(port)),
@@ -72,7 +73,7 @@ TFMINI::~TFMINI()
 int
 TFMINI::init()
 {
-	int32_t hw_model = 1; // only one model so far...
+	int32_t hw_model = 2;
 
 	switch (hw_model) {
 	case 1: // TFMINI (12m, 100 Hz)
@@ -83,7 +84,14 @@ TFMINI::init()
 		// So we set 0.4 as valid minimum.
 		_px4_rangefinder.set_min_distance(0.4f);
 		_px4_rangefinder.set_max_distance(12.0f);
-		_px4_rangefinder.set_fov(math::radians(1.15f));
+		_px4_rangefinder.set_fov(math::radians(1.15f)); //field of view
+
+		break;
+	case 2: // TFMINI-S
+		// Note: datasheet是寫0.1m~12m，但目前先維持最小0.4的限制（和廠內設計值比對後更正）
+		_px4_rangefinder.set_min_distance(0.4f);
+		_px4_rangefinder.set_max_distance(12.0f);
+		_px4_rangefinder.set_fov(math::radians(2f));
 
 		break;
 
@@ -177,11 +185,11 @@ TFMINI::collect()
 	int64_t read_elapsed = hrt_elapsed_time(&_last_read);
 
 	// the buffer for read chars is buflen minus null termination
-	char readbuf[sizeof(_linebuf)] {};
-	unsigned readlen = sizeof(readbuf) - 1;
+	char readbuf[sizeof(_linebuf)] {}; 		//10
+	unsigned readlen = sizeof(readbuf) - 1;		//9
 
 	int ret = 0;
-	float distance_m = -1.0f;
+	// float distance_m = -1.0f;
 
 	// Check the number of bytes available in the buffer
 	int bytes_available = 0;
@@ -276,6 +284,7 @@ void
 TFMINI::print_info()
 {
 	printf("Using port '%s'\n", _port);
+	printf("range=%f\n", distance_m);
 	perf_print_counter(_sample_perf);
 	perf_print_counter(_comms_errors);
 }

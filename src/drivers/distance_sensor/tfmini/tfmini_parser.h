@@ -42,6 +42,8 @@
 
 #pragma once
 
+#define TFMINI_S_EN	0
+
 // Data Format for Benewake TFmini
 // ===============================
 // 9 bytes total per message:
@@ -51,10 +53,9 @@
 // 4) Dist_H (high 8bit)
 // 5) Strength_L (low 8bit)
 // 6) Strength_H (high 8bit)
-// 7) Reserved bytes
+// 7) Reserved bytes, Mode, distance mode, 02 for short distance and 07 for long distance, automatically switched by default
 // 8) Original signal quality degree
 // 9) Checksum parity bit (low 8bit), Checksum = Byte1 + Byte2 +...+Byte8. This is only a low 8bit though
-
 
 enum class TFMINI_PARSE_STATE {
 	STATE0_UNSYNC = 0,
@@ -69,4 +70,31 @@ enum class TFMINI_PARSE_STATE {
 	STATE6_GOT_CHECKSUM
 };
 
+// Data Format for Benewake TFmini-S
+// ===============================
+// 9 bytes total per message:
+// 1) 0x59
+// 2) 0x59
+// 3) Dist_L (low 8bit)
+// 4) Dist_H (high 8bit)
+// 5) Strength_L (low 8bit)
+// 6) Strength_H (high 8bit)
+// 7) Temp (low 8bit)
+// 8) Temp (high 8bit)
+// 9) Checksum parity bit (low 8bit), Checksum = Byte1 + Byte2 +...+Byte8. This is only a low 8bit though
+
+enum class TFMINI_S_PARSE_STATE {
+	STATE0_UNSYNC = 0,
+	STATE1_SYNC_1,
+	STATE1_SYNC_2,
+	STATE2_GOT_DIST_L,
+	STATE2_GOT_DIST_H,
+	STATE3_GOT_STRENGTH_L,
+	STATE3_GOT_STRENGTH_H,
+	STATE4_GOT_TEMP_L,
+	STATE5_GOT_TEMP_H,
+	STATE6_GOT_CHECKSUM
+}
+
 int tfmini_parse(char c, char *parserbuf, unsigned *parserbuf_index, TFMINI_PARSE_STATE *state, float *dist);
+int tfmini_s_parse(char c, char *parserbuf, unsigned *parserbuf_index, TFMINI_PARSE_STATE *state, float *dist);

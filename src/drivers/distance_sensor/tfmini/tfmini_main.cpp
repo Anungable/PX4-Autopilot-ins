@@ -43,6 +43,7 @@ namespace tfmini
 
 TFMINI	*g_dev{nullptr};
 
+//function prototype
 int start(const char *port, uint8_t rotation);
 int status();
 int stop();
