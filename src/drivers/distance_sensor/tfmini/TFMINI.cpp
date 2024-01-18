@@ -135,8 +135,8 @@ TFMINI::init()
 		}
 
 		uart_config.c_cflag |= (CLOCAL | CREAD);	// ignore modem controls
-		uart_config.c_cflag &= ~CSIZE;
-		uart_config.c_cflag |= CS8;			// 8-bit characters
+		uart_config.c_cflag &= ~CSIZE;			// turn off existing size setting in terminal settings
+		uart_config.c_cflag |= CS8;			// 8-bit characters (per byte)
 		uart_config.c_cflag &= ~PARENB;			// no parity bit
 		uart_config.c_cflag &= ~CSTOPB;			// only need 1 stop bit
 		uart_config.c_cflag &= ~CRTSCTS;		// no hardware flowcontrol

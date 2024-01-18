@@ -1,0 +1,7 @@
+module_name: JRC NJR4234 Rangefinder
+serial_config:
+    - command: njr4234 start -d ${SERIAL_DEV}
+      port_config_param:
+        name: SENS_NJR4234_CFG
+        group: Sensors
+

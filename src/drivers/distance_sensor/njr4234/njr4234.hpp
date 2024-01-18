@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   Copyright (c) 2017-2021 PX4 Development Team. All rights reserved.
+ *   Copyright (c) 2017-2024 PX4 Development Team. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -32,14 +32,10 @@
  ****************************************************************************/
 
 /**
- * @file tfmini.cpp
- * @author Lorenz Meier <lm@inf.ethz.ch>
- * @author Greg Hulands
- * @author Ayush Gaud <ayush.gaud@gmail.com>
- * @author Christoph Tobler <christoph@px4.io>
- * @author Mohammed Kabir <mhkabir@mit.edu>
+ * @file njr4234.cpp
+ * @author Inung Shen <inung.shen@coretronic-robotics.com>
  *
- * Driver for the Benewake TFmini laser rangefinder series
+ * Driver for the NJR4234 microwave distance sensor
  */
 
 #pragma once
@@ -54,43 +50,74 @@
 #include <lib/drivers/rangefinder/PX4Rangefinder.hpp>
 #include <uORB/topics/distance_sensor.h>
 
-#include "tfmini_parser.h"
+#define NJR4234_DEFAULT_PORT	"/dev/ttyS3" //set to telem2
 
-#define TFMINI_DEFAULT_PORT	"/dev/ttyS3" //set to telem2
+#define OUTDATA_HEADER1_MEAS_DIST   0x21
+#define OUTDATA_HEADER2_STATIONARY  0x00
+#define OUTDATA_HEADER2_MOVING      0x02
+#define OUTDATA_HEADER3             0x00
+#define OUTDATA_HEADER4             0x00
+#define RUNCMD_HEADER1              0xE0    //response of run command
+#define READ_ALL_PARAM_HEADER1      0x23    //response for read default and all param H1
+#define READ_ALL_PARAM_HEADER2      0x17    //response for read default and all param H2
 
 using namespace time_literals;
 
-class TFMINI : public px4::ScheduledWorkItem
+enum njr234_package {
+	PREAMBLE = 0,
+	HEADER,
+	COMMAND,
+	ALL_PARAM,
+	STATIONARY_OBJ, //output data
+	MOVING_OBJ,     //output data
+	END_SEQ
+};
+
+enum NJR4234_PARSE_STATE {
+	njr234_package decode_state;
+	uint8_t header_msg;
+	uint8_t data_buf[8];
+};
+
+struct njr4234_pack_s
+{
+    float range;
+    float vel;
+    uint8_t size;
+    uint8_t snr;
+    uint8_t pack_type;
+    uint8_t cmd1, cmd2, cmd3;
+    NJR4234_PARSE_STATE parser;
+};
+
+class NJR4234 : public px4::ScheduledWorkItem
 {
 public:
-	TFMINI(const char *port, uint8_t rotation = distance_sensor_s::ROTATION_DOWNWARD_FACING);
-	virtual ~TFMINI();
+	NJR4234(const char *port, uint8_t rotation = distance_sensor_s::ROTATION_FORWARD_FACING);
+	virtual ~NJR4234();
 
-	int init();
-
-	void print_info();
+	int 				init();
+	void 				print_info();
 
 private:
 
-	int collect();
+	int  				collect();
 
-	void Run() override;
+	void 				Run() override;
 
-	void start();
-	void stop();
+	void 				start();
+	void 				stop();
+	int  NJR4234_parser(unsigned char c, char *parserbuf, unsigned *parserbuf_index, NJR4234_PARSE_STATE *state, float *dist);
 
-	PX4Rangefinder	_px4_rangefinder;
+	PX4Rangefinder			_px4_rangefinder;
 
-	TFMINI_PARSE_STATE _parse_state {TFMINI_PARSE_STATE::STATE0_UNSYNC};
+	char 				_linebuf[10] {};
+	char 				_port[20] {};
 
-	char _linebuf[10] {};
-	char _port[20] {};
-
-	static constexpr int kCONVERSIONINTERVAL{9_ms};
-
-	int _fd{-1};
-
-	unsigned int _linebuf_index{0};
+	int				_fd{-1};
+	char				_linebuf[8] {};
+	unsigned int			_linebuf_index {0};
+	NJR4234_PARSE_STATE		_parse_state {};
 
 	hrt_abstime _last_read{0};
 

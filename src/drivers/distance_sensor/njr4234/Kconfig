@@ -1,0 +1,5 @@
+menuconfig DRIVERS_DISTANCE_SENSOR_NJR4234
+	bool "njr4234"
+	default n
+	---help---
+		Enable support for njr4234

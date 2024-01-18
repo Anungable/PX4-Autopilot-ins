@@ -96,16 +96,16 @@ public:
 	void				start();
 	void				stop();
 
+
 private:
 
 	void				Run() override;
-	int				measure();
 	int				collect();
 
 	int				SP25_parser(unsigned char c, char *parserbuf, unsigned *parserbuf_index);
 
 	char 				_port[20] {};
-	int         		        _interval{100000};
+	int         		        _interval{20000};
 	bool				_collect_phase{false};
 	PX4Rangefinder                  _px4_rangefinder;
 	int				_fd{-1};

@@ -82,7 +82,7 @@ int tfmini_parse(char c, char *parserbuf, unsigned *parserbuf_index, TFMINI_PARS
 		break;
 
 	case TFMINI_PARSE_STATE::STATE0_UNSYNC:
-		if (c == 'Y') {
+		if (c == 'Y') {		//0x59->89_{decimal}
 			*state = TFMINI_PARSE_STATE::STATE1_SYNC_1;
 			parserbuf[*parserbuf_index] = c;
 			(*parserbuf_index)++;

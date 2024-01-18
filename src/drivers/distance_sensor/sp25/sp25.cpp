@@ -39,8 +39,6 @@
 #include <string.h>
 #include <stdlib.h>
 
-#define SP25_TAKE_RANGE_REG		'd'
-
 static sp25_package sp25_pack {.range = 0.0f, .vel = 0.0f, .size = 0, .snr = 0, .pack_type = 0};
 
 SP25::SP25(const char *port, uint8_t rotation) :
@@ -86,20 +84,6 @@ int SP25::init()
 	return PX4_OK;
 }
 
-int SP25::measure()
-{
-	// Send the command to begin a measurement.
-	char cmd = SP25_TAKE_RANGE_REG;
-	int ret = ::write(_fd, &cmd, 1);
-
-	if (ret != sizeof(cmd)) {
-		perf_count(_comms_errors);
-		PX4_DEBUG("write fail %d", ret);
-		return ret;
-	}
-
-	return PX4_OK;
-}
 
 int SP25::collect()
 {
@@ -112,39 +96,52 @@ int SP25::collect()
 	unsigned char readbuf[sizeof(_linebuf)];
 	unsigned readlen = sizeof(readbuf) - 1;
 
+	int ret = 0;
+	float distance_m = -1.0f;
+
+	int bytes_available = 0;
+	::ioctl(_fd, FIONREAD, (unsigned long)&bytes_available);
+
+	if (!bytes_available) {
+		perf_end(_sample_perf);
+		PX4_INFO("cannot run parser\n");
+		return 0;
+	}
+
 	/* read from the sensor (uart buffer) */
 	const hrt_abstime timestamp_sample = hrt_absolute_time();
-	int ret = ::read(_fd, &readbuf[0], readlen);
+	bool valid = false;
+	do {
+		ret = ::read(_fd, &readbuf[0], readlen);
+		if (ret < 0) {
+			PX4_DEBUG("read err: %d", ret);
+			perf_count(_comms_errors);
+			perf_end(_sample_perf);
 
-	if (ret < 0) {
-		PX4_DEBUG("read err: %d", ret);
-		perf_count(_comms_errors);
-		perf_end(_sample_perf);
+			/* only throw an error if we time out */
+			if (read_elapsed > (_interval * 2)) {
+				return ret;
 
-		/* only throw an error if we time out */
-		if (read_elapsed > (_interval * 2)) {
-			return ret;
+			} else {
+				return -EAGAIN;
+			}
 
-		} else {
+		} else if (ret == 0) {
 			return -EAGAIN;
 		}
 
-	} else if (ret == 0) {
-		return -EAGAIN;
-	}
+		_last_read = hrt_absolute_time();
 
-	_last_read = hrt_absolute_time();
-
-	bool valid = false;
-	float distance_m = -1.0f;
-
-	for ( int i = 0; i < ret; i++ ) {
-		//TODO: need to check overflow
-		if (OK == SP25_parser(readbuf[i],_linebuf, &_linebuf_index)) {
-			valid = true;
-			PX4_INFO("run parser\n");
+		for ( int i = 0; i < ret; i++ ) {
+			//TODO: need to check overflow
+			if (OK == SP25_parser(readbuf[i],_linebuf, &_linebuf_index)) {
+				valid = true;
+				PX4_INFO("run parser\n");
+			}
 		}
-	}
+		bytes_available -= ret;
+	} while (bytes_available > 0);
+
 
 	if (!valid) {
 		return -EAGAIN;
@@ -162,7 +159,6 @@ int SP25::collect()
 
 void SP25::start()
 {
-	_collect_phase = false;
 	ScheduleNow();
 }
 
@@ -181,7 +177,7 @@ void SP25::Run()
 
 	if (_fd < 0) {
 		/* open fd */
-		_fd = ::open(_port, O_RDWR | O_NOCTTY | O_NONBLOCK);
+		_fd = ::open(_port, O_RDWR | O_NOCTTY);
 
 		if (_fd < 0) {
 			PX4_ERR("open failed (%i)", errno);
@@ -193,13 +189,16 @@ void SP25::Run()
 		int termios_state;
 
 		/* fill the struct for the new configuration */
-		tcgetattr(_fd, &uart_config);
+		tcgetattr(_fd, &uart_config); //to access the termios structure
 
 		/* clear ONLCR flag (which appends a CR for every LF) */
-		uart_config.c_oflag &= ~ONLCR;
+		uart_config.c_oflag &= ~ONLCR; //turn off the conversion of newline characters to carriage return and newline \r\n
 
-		/* no parity, one stop bit */
-		uart_config.c_cflag &= ~(CSTOPB | PARENB | CRTSCTS);
+		/* no parity, no hardware flow control */ // TODO: check if only 1 stop bit
+		uart_config.c_cflag &= ~(PARENB | CSTOPB | CRTSCTS);
+
+		/* ignore modem control lines and enable receiver (allow to read) */
+		uart_config.c_cflag |= (CLOCAL | CREAD);
 
 		unsigned speed = B115200;
 		/* set baud rate */
@@ -216,47 +215,34 @@ void SP25::Run()
 		}
 	}
 
-	if (_collect_phase) {
 
-		/* perform collection */
-		int collect_ret = collect();
+	/* perform collection */
+	int collect_ret = collect();
 
-		if (collect_ret == -EAGAIN) {
-			/* reschedule to grab the missing bits, time to transmit 8 bytes @ 9600 bps */
-			ScheduleDelayed(1042 * 8);
+	if (collect_ret == -EAGAIN) {
+		/* reschedule to grab the missing bits, time to transmit 14 bytes @ 115200 bps */
+		ScheduleDelayed(87 * 14);
 
-			return;
-		}
-
-		if (OK != collect_ret) {
-
-			/* we know the sensor needs about four seconds to initialize */
-			if (hrt_absolute_time() > 5 * 1000 * 1000LL && _consecutive_fail_count < 5) {
-				PX4_ERR("collection error #%u", _consecutive_fail_count);
-			}
-
-			_consecutive_fail_count++;
-
-			/* restart the measurement state machine */
-			start();
-			return;
-
-		} else {
-			/* apparently success */
-			_consecutive_fail_count = 0;
-		}
-
-		/* next phase is measurement */
-		_collect_phase = false;
+		return;
 	}
+	/* error count */
+	// if (OK != collect_ret) {
 
-	/* measurement phase */
-	if (OK != measure()) {
-		PX4_DEBUG("measure error");
-	}
+	// 	/* we know the sensor needs about four seconds to initialize */
+	// 	if (hrt_absolute_time() > 5 * 1000 * 1000LL && _consecutive_fail_count < 5) {
+	// 		PX4_ERR("collection error #%u", _consecutive_fail_count);
+	// 	}
 
-	/* next phase is collection */
-	_collect_phase = true;
+	// 	_consecutive_fail_count++;
+
+	// 	/* restart the measurement state machine */
+	// 	start();
+	// 	return;
+
+	// } else {
+	// 	/* apparently success */
+	// 	_consecutive_fail_count = 0;
+	// }
 
 	/* schedule a fresh cycle call when the measurement is done */
 	ScheduleDelayed(_interval);
@@ -264,6 +250,9 @@ void SP25::Run()
 
 void SP25::print_info()
 {
+	PX4_INFO("Using port: %s\n", _port);
+	PX4_INFO("range=%f\n",(double) sp25_pack.range);
+	PX4_INFO("signal noise ratio=%f\n",(double) sp25_pack.snr);
 	perf_print_counter(_sample_perf);
 	perf_print_counter(_comms_errors);
 }
