@@ -94,7 +94,7 @@ enum class TFMINI_S_PARSE_STATE {
 	STATE4_GOT_TEMP_L,
 	STATE5_GOT_TEMP_H,
 	STATE6_GOT_CHECKSUM
-}
+};
 
 int tfmini_parse(char c, char *parserbuf, unsigned *parserbuf_index, TFMINI_PARSE_STATE *state, float *dist);
-int tfmini_s_parse(char c, char *parserbuf, unsigned *parserbuf_index, TFMINI_PARSE_STATE *state, float *dist);
+int tfmini_s_parse(char c, char *parserbuf, unsigned *parserbuf_index, TFMINI_S_PARSE_STATE *state, float *dist);
