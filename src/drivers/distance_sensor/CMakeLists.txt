@@ -1,6 +1,6 @@
 ############################################################################
 #
-#   Copyright (c) 2017 PX4 Development Team. All rights reserved.
+#   Copyright (c) 2017-2024 PX4 Development Team. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -41,6 +41,7 @@ add_subdirectory(mb12xx)
 add_subdirectory(pga460)
 add_subdirectory(lightware_laser_i2c)
 add_subdirectory(lightware_laser_serial)
+add_subdirectory(njr4234)
 add_subdirectory(srf02)
 add_subdirectory(sp25)
 add_subdirectory(teraranger)

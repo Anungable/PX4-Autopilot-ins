@@ -86,13 +86,11 @@ TFMINI::init()
 		_px4_rangefinder.set_fov(math::radians(1.15f)); //field of view
 
 		break;
-	case 2: // TFMINI-S
-		// Note: datasheet是寫0.1m~12m，但目前先維持最小0.4的限制（和廠內設計值比對後更正）
-		_px4_rangefinder.set_min_distance(0.4f);
-		_px4_rangefinder.set_max_distance(12.0f);
-		_px4_rangefinder.set_fov(math::radians(2.0f));
-
-		break;
+	// case 2: // TFMINI-S
+	// 	_px4_rangefinder.set_min_distance(0.4f);
+	// 	_px4_rangefinder.set_max_distance(12.0f);
+	// 	_px4_rangefinder.set_fov(math::radians(2.0f));
+	// 	break;
 
 	default:
 		PX4_ERR("invalid HW model %" PRId32 ".", hw_model);
@@ -184,8 +182,8 @@ TFMINI::collect()
 	int64_t read_elapsed = hrt_elapsed_time(&_last_read);
 
 	// the buffer for read chars is buflen minus null termination
-	char readbuf[sizeof(_linebuf)] {}; 		//10
-	unsigned readlen = sizeof(readbuf) - 1;		//9
+	char readbuf[sizeof(_linebuf)] {};
+	unsigned readlen = sizeof(readbuf) - 1;
 
 	int ret = 0;
 	float distance_m = -1.0f;

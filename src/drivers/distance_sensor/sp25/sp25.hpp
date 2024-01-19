@@ -49,6 +49,7 @@
 #include <drivers/drv_hrt.h>
 #include <drivers/device/device.h>
 #include <lib/perf/perf_counter.h>
+#include <uORB/topics/distance_sensor.h>
 
 using namespace time_literals;
 

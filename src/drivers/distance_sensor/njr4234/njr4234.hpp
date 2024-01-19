@@ -52,42 +52,32 @@
 
 #define NJR4234_DEFAULT_PORT	"/dev/ttyS3" //set to telem2
 
+// Data Format for NJR4234
+// ===============================
+// 16bytes-52bytes depends on measured object type (stationary or moving or both)
+// 1) 4 bytes preamble
+// 2) 4 bytes header
+// 3) 28 bytes stationary obj data
+// 4) 8 bytes moving obj data
+
 #define OUTDATA_HEADER1_MEAS_DIST   0x21
 #define OUTDATA_HEADER2_STATIONARY  0x00
 #define OUTDATA_HEADER2_MOVING      0x02
 #define OUTDATA_HEADER3             0x00
 #define OUTDATA_HEADER4             0x00
-#define RUNCMD_HEADER1              0xE0    //response of run command
-#define READ_ALL_PARAM_HEADER1      0x23    //response for read default and all param H1
-#define READ_ALL_PARAM_HEADER2      0x17    //response for read default and all param H2
+#define RUNCMD_HEADER               0xE0
+#define READ_ALL_PARAM_HEADER1      0x23
+#define READ_ALL_PARAM_HEADER2      0x17
 
 using namespace time_literals;
 
-enum njr234_package {
+enum class NJR4234_PARSE_STATE {
 	PREAMBLE = 0,
 	HEADER,
 	COMMAND,
 	ALL_PARAM,
-	STATIONARY_OBJ, //output data
-	MOVING_OBJ,     //output data
-	END_SEQ
-};
-
-enum NJR4234_PARSE_STATE {
-	njr234_package decode_state;
-	uint8_t header_msg;
-	uint8_t data_buf[8];
-};
-
-struct njr4234_pack_s
-{
-    float range;
-    float vel;
-    uint8_t size;
-    uint8_t snr;
-    uint8_t pack_type;
-    uint8_t cmd1, cmd2, cmd3;
-    NJR4234_PARSE_STATE parser;
+	STATIONARY_OBJ,
+	MOVING_OBJ
 };
 
 class NJR4234 : public px4::ScheduledWorkItem
@@ -111,13 +101,13 @@ private:
 
 	PX4Rangefinder			_px4_rangefinder;
 
-	char 				_linebuf[10] {};
+	int				_fd {-1};
 	char 				_port[20] {};
-
-	int				_fd{-1};
 	char				_linebuf[8] {};
 	unsigned int			_linebuf_index {0};
 	NJR4234_PARSE_STATE		_parse_state {};
+	int				_interval {90_ms};
+	uint8_t 			_header_msg; //msg is 0 for measuring distance, 1 for stationary obj, 2 for moving obj, 3 for reading param
 
 	hrt_abstime _last_read{0};
 

@@ -36,6 +36,7 @@
 #include <lib/drivers/device/Device.hpp>
 #include <fcntl.h>
 
+//TODO: rm this structure and only keep range
 static njr4234_pack_s njr4234_pack {
 .range = 0, .vel = 0, .size = 0, .snr = 0, .pack_type = 0, .cmd1 = 0, .cmd2 = 0, .cmd3 = 0, .parser.decode_state = 0, .parser.header_msg = 0
 };
@@ -75,10 +76,9 @@ NJR4234::~NJR4234()
 int
 NJR4234::init()
 {
-
-	_px4_rangefinder.set_min_distance(0.4f);
-	_px4_rangefinder.set_max_distance(12.0f);
-	_interval = 20000;
+	// TODO: 1. check the maximum distance calulation method 2. check the updating frequency to get _interval
+	_px4_rangefinder.set_min_distance(0.85f);
+	_px4_rangefinder.set_max_distance(20.0f);
 
 	start();
 
@@ -100,11 +100,11 @@ NJR4234::collect()
 	int ret = 0;
 	float distance_m = -1.0f;
 
-	// Check the number of cs available in the buffer
-	int cs_available = 0;
-	::ioctl(_fd, FIONREAD, (unsigned long)&cs_available);
+	// Check the number of available bytes in the buffer
+	int available_byte = 0;
+	::ioctl(_fd, FIONREAD, (unsigned long)&available_byte);
 
-	if (!cs_available) {
+	if (!available_byte) {
 		perf_end(_sample_perf);
 		return 0;
 	}
@@ -136,13 +136,13 @@ NJR4234::collect()
 
 		// parse buffer
 		for (int i = 0; i < ret; i++) {
-			NJR4234_parse(readbuf[i], _linebuf, &_linebuf_index, &_parse_state, &distance_m);
+			NJR4234_parser(readbuf[i], _linebuf, &_linebuf_index, &_parse_state, &distance_m);
 		}
 
 		// cs left to parse
-		cs_available -= ret;
+		available_byte -= ret;
 
-	} while (cs_available > 0);
+	} while (available_byte > 0);
 
 	// no valid measurement after parsing buffer
 	if (distance_m < 0.0f) {
@@ -230,15 +230,13 @@ int  NJR4234_parser(unsigned char c, char *parserbuf, unsigned *parserbuf_index,
 	switch (*state)
 	{
 		case PREAMBLE:
-			// check preamble 0xCC|CC|55|55
+			// check 4 bytes preamble 0xCC|CC|55|55
 
 			*parserbuf_index++;
 			if(c == 0xCC && (*parserbuf_index == 1 || *parserbuf_index == 2))
-			{
-			}
+			{ }
 			else if(c == 0x55 && *parserbuf_index == 3)
-			{
-			}
+			{ }
 			else if(c == 0x55 && *parserbuf_index == 4)
 			{
 				*parserbuf_index = 0;
@@ -250,55 +248,49 @@ int  NJR4234_parser(unsigned char c, char *parserbuf, unsigned *parserbuf_index,
 			}
 			break;
 		case HEADER:
-			if(*parserbuf_index == 0) //第一個byte決定模式
+			if(*parserbuf_index == 0)
 			{
-				//check all three notification responses
-
 				*parserbuf_index++;
 				if(c == OUTDATA_HEADER1_MEAS_DIST)
 				{
-					njr4234_pack.parser.header_msg = 0;
+					_header_msg = 0;
 				}
-				else if(c == RUNCMD_HEADER1)
+				else if(c == RUNCMD_HEADER)
 				{
 					*state = COMMAND;
 					*parserbuf_index = 0;
 				}
 				else if(c == READ_ALL_PARAM_HEADER1)
 				{
-					njr4234_pack.parser.header_msg = 3;
+					_header_msg = 3;
 				}
 			}
 			else if(*parserbuf_index >= 1)
 			{
 				*parserbuf_index++;
-				if(((c & 0x02) == OUTDATA_HEADER2_STATIONARY && njr4234_pack.parser.header_msg == 0) || njr4234_pack.parser.header_msg == 1)
+				if(((c & 0x02) == OUTDATA_HEADER2_STATIONARY && _header_msg == 0) || _header_msg == 1)
 				{
-					njr4234_pack.parser.header_msg = 1;
+					_header_msg = 1;
 					if(*parserbuf_index == 4)
 					{
 						*state = STATIONARY_OBJ;
 						*parserbuf_index = 0;
 					}
 				}
-				else if(((c & 0x02) == OUTDATA_HEADER2_MOVING && njr4234_pack.parser.header_msg == 0) || njr4234_pack.parser.header_msg == 2)
+				else if(((c & 0x02) == OUTDATA_HEADER2_MOVING && _header_msg == 0) || _header_msg == 2)
 				{
-					njr4234_pack.parser.header_msg = 2;
+					_header_msg = 2;
 					if(*parserbuf_index == 4)
 					{
 						*state = MOVING_OBJ;
 						*parserbuf_index = 0;
-						njr4234_pack.parser.data_buf[0] = 0;
-						njr4234_pack.parser.data_buf[1] = 0;
-						njr4234_pack.parser.data_buf[2] = 0;
-						njr4234_pack.parser.data_buf[3] = 0;
 					}
 				}
-				else if(njr4234_pack.parser.header_msg == 3)
+				else if(_header_msg == 3)
 				{
 					if(*parserbuf_index == 2 && c != READ_ALL_PARAM_HEADER2)
 					{
-						njr4234_pack.parser.header_msg = 0;
+						_header_msg = 0;
 					}
 					else if(*parserbuf_index == 4)
 					{
@@ -313,25 +305,19 @@ int  NJR4234_parser(unsigned char c, char *parserbuf, unsigned *parserbuf_index,
 				}
 			}
 			break;
-		case COMMAND: //3 bytes in total
+		case COMMAND:
 			*parserbuf_index++;
 			if(*parserbuf_index == 1)
-			{
-				njr4234_pack.cmd1 = c;
-			}
+			{ }
 			else if(*parserbuf_index == 2)
-			{
-				njr4234_pack.cmd2 = c;
-			}
+			{ }
 			else
 			{
-				njr4234_pack.cmd3 = c;
 				*parserbuf_index = 0;
 				*state = PREAMBLE;
 			}
 			break;
 		case ALL_PARAM:
-			db_printf(DB_ALWAYS, "%x ", c);
 			*parserbuf_index++;
 			if(*parserbuf_index == 23)
 			{
@@ -351,22 +337,19 @@ int  NJR4234_parser(unsigned char c, char *parserbuf, unsigned *parserbuf_index,
 			*parserbuf_index++;
 			if(*parserbuf_index <= 8)
 			{
-				njr4234_pack.parser.data_buf[*parserbuf_index - 1] = c;
+				*parserbuf[*parserbuf_index - 1] = c;
 			}
 			if(*parserbuf_index == 8)
 			{
-				uint16_t tmp_val = njr4234_pack.parser.data_buf[0] << 8;
-				tmp_val |= njr4234_pack.parser.data_buf[1];
-				njr4234_pack.range = ((float) tmp_val) * 0.01f;
+				uint16_t tmp_val = *parserbuf[0] << 8;
+				tmp_val |= *parserbuf[1];
+				*dist = ((float) tmp_val) * 0.01f;
 				*parserbuf_index = 0;
 				*state = PREAMBLE;
-				tmp_val = njr4234_pack.parser.data_buf[6] << 8;
-				tmp_val |= njr4234_pack.parser.data_buf[7];
-				return true;
+				ret = 0;
 			}
 			break;
-		case END_SEQ:
-			break;
 	}
+	return ret;
 }
 

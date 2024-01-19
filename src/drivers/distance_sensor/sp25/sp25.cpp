@@ -33,12 +33,13 @@
 
 #include "sp25.hpp"
 
-#include <inttypes.h>
+#include <stdint.h>
 #include <fcntl.h>
 #include <termios.h>
 #include <string.h>
 #include <stdlib.h>
 
+//TODO: rm this structure and only keep range
 static sp25_package sp25_pack {.range = 0.0f, .vel = 0.0f, .size = 0, .snr = 0, .pack_type = 0};
 
 SP25::SP25(const char *port, uint8_t rotation) :

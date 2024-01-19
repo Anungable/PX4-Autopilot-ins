@@ -32,7 +32,7 @@
  ****************************************************************************/
 
 /**
- * @file modified from sf0x_parser.cpp
+ * @file tfmini_parser.h
  * @author Lorenz Meier <lm@inf.ethz.ch>
  * @author Chuong Nguyen <chnguye7@asu.edu>
  * @author Ayush Gaud <ayush.gaud@gmail.com>
@@ -41,8 +41,6 @@
  */
 
 #pragma once
-
-#define TFMINI_S_EN	0
 
 // Data Format for Benewake TFmini
 // ===============================
@@ -83,18 +81,4 @@ enum class TFMINI_PARSE_STATE {
 // 8) Temp (high 8bit)
 // 9) Checksum parity bit (low 8bit), Checksum = Byte1 + Byte2 +...+Byte8. This is only a low 8bit though
 
-enum class TFMINI_S_PARSE_STATE {
-	STATE0_UNSYNC = 0,
-	STATE1_SYNC_1,
-	STATE1_SYNC_2,
-	STATE2_GOT_DIST_L,
-	STATE2_GOT_DIST_H,
-	STATE3_GOT_STRENGTH_L,
-	STATE3_GOT_STRENGTH_H,
-	STATE4_GOT_TEMP_L,
-	STATE5_GOT_TEMP_H,
-	STATE6_GOT_CHECKSUM
-};
-
 int tfmini_parse(char c, char *parserbuf, unsigned *parserbuf_index, TFMINI_PARSE_STATE *state, float *dist);
-int tfmini_s_parse(char c, char *parserbuf, unsigned *parserbuf_index, TFMINI_S_PARSE_STATE *state, float *dist);

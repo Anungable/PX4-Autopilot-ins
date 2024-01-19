@@ -44,9 +44,6 @@
 #include <string.h>
 #include <stdlib.h>
 
-//parserbuf=[0x59,0x59,dist_L,dist_H,strL, strH, reserved, quality, checksum]
-
-#if !TFMINI_S_EN
 int tfmini_parse(char c, char *parserbuf, unsigned *parserbuf_index, TFMINI_PARSE_STATE *state, float *dist)
 {
 	int ret = -1;
@@ -140,8 +137,8 @@ int tfmini_parse(char c, char *parserbuf, unsigned *parserbuf_index, TFMINI_PARS
 			parserbuf[*parserbuf_index] = '\0';
 			unsigned int t1 = parserbuf[2];
 			unsigned int t2 = parserbuf[3];
-			t2 <<= 8;
-			t2 += t1;
+			t2 <<= 8;  //high 8 bits of STATE2_GOT_DIST_H
+			t2 += t1;  //plus low 8 bits of STATE2_GOT_DIST_L
 
 			if (t2 < 0xFFFFu) {
 				*dist = ((float)t2) / 100;
@@ -165,122 +162,3 @@ int tfmini_parse(char c, char *parserbuf, unsigned *parserbuf_index, TFMINI_PARS
 
 	return ret;
 }
-#endif
-
-#if TFMINI_S_EN
-int tfmini_s_parse(char c, char *parserbuf, unsigned *parserbuf_index, TFMINI_S_PARSE_STATE *state, float *dist)
-{
-	int ret = -1;
-	//char *end;
-
-	switch (*state) {
-	case TFMINI_S_PARSE_STATE::STATE6_GOT_CHECKSUM:
-		if (c == 'Y') {
-			*state = TFMINI_S_PARSE_STATE::STATE1_SYNC_1;
-			parserbuf[*parserbuf_index] = c;
-			(*parserbuf_index)++;
-
-		} else {
-			*state = TFMINI_S_PARSE_STATE::STATE0_UNSYNC;
-		}
-
-		break;
-
-	case TFMINI_S_PARSE_STATE::STATE0_UNSYNC:
-		if (c == 'Y') {		//0x59->89_{decimal}
-			*state = TFMINI_S_PARSE_STATE::STATE1_SYNC_1;
-			parserbuf[*parserbuf_index] = c;
-			(*parserbuf_index)++;
-		}
-
-		break;
-
-	case TFMINI_S_PARSE_STATE::STATE1_SYNC_1:
-		if (c == 'Y') {
-			*state = TFMINI_S_PARSE_STATE::STATE1_SYNC_2;
-			parserbuf[*parserbuf_index] = c;
-			(*parserbuf_index)++;
-
-		} else {
-			*state = TFMINI_S_PARSE_STATE::STATE0_UNSYNC;
-			*parserbuf_index = 0;
-		}
-
-		break;
-
-	case TFMINI_S_PARSE_STATE::STATE1_SYNC_2:
-		*state = TFMINI_S_PARSE_STATE::STATE2_GOT_DIST_L;
-		parserbuf[*parserbuf_index] = c;
-		(*parserbuf_index)++;
-
-		break;
-
-	case TFMINI_S_PARSE_STATE::STATE2_GOT_DIST_L:
-		*state = TFMINI_S_PARSE_STATE::STATE2_GOT_DIST_H;
-		parserbuf[*parserbuf_index] = c;
-		(*parserbuf_index)++;
-
-		break;
-
-	case TFMINI_S_PARSE_STATE::STATE2_GOT_DIST_H:
-		*state = TFMINI_S_PARSE_STATE::STATE3_GOT_STRENGTH_L;
-		parserbuf[*parserbuf_index] = c;
-		(*parserbuf_index)++;
-
-		break;
-
-	case TFMINI_S_PARSE_STATE::STATE3_GOT_STRENGTH_L:
-		*state = TFMINI_S_PARSE_STATE::STATE3_GOT_STRENGTH_H;
-		parserbuf[*parserbuf_index] = c;
-		(*parserbuf_index)++;
-
-		break;
-
-	case TFMINI_S_PARSE_STATE::STATE3_GOT_STRENGTH_H:
-		*state = TFMINI_S_PARSE_STATE::STATE4_GOT_TEMP_L;
-		parserbuf[*parserbuf_index] = c;
-		(*parserbuf_index)++;
-
-		break;
-
-	case TFMINI_S_PARSE_STATE::STATE4_GOT_TEMP_L:
-		*state = TFMINI_S_PARSE_STATE::STATE5_GOT_TEMP_H;
-		parserbuf[*parserbuf_index] = c;
-		(*parserbuf_index)++;
-
-		break;
-
-	case TFMINI_S_PARSE_STATE::STATE5_GOT_TEMP_H:
-		// Find the checksum
-		unsigned char cksm = 0;
-
-		for (int i = 0; i < 8; i++) {
-			cksm += parserbuf[i];
-		}
-
-		if (c == cksm) {
-			parserbuf[*parserbuf_index] = '\0';
-			unsigned int t1 = parserbuf[2];
-			unsigned int t2 = parserbuf[3];
-			t2 <<= 8; //parserbuf[3]*256
-			t2 += t1;
-
-			if (t2 < 0xFFFFu) {
-				*dist = ((float)t2) / 100;
-			}
-
-			*state = TFMINI_S_PARSE_STATE::STATE6_GOT_CHECKSUM;
-			*parserbuf_index = 0;
-			ret = 0;
-
-		} else {
-			*state = TFMINI_S_PARSE_STATE::STATE0_UNSYNC;
-			*parserbuf_index = 0;
-		}
-
-		break;
-	}
-
-	return ret;
-}
-#endif
