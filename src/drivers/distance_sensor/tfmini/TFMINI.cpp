@@ -86,11 +86,6 @@ TFMINI::init()
 		_px4_rangefinder.set_fov(math::radians(1.15f)); //field of view
 
 		break;
-	// case 2: // TFMINI-S
-	// 	_px4_rangefinder.set_min_distance(0.4f);
-	// 	_px4_rangefinder.set_max_distance(12.0f);
-	// 	_px4_rangefinder.set_fov(math::radians(2.0f));
-	// 	break;
 
 	default:
 		PX4_ERR("invalid HW model %" PRId32 ".", hw_model);

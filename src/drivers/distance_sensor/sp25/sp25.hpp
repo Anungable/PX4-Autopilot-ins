@@ -53,7 +53,8 @@
 
 using namespace time_literals;
 
-#define SP25_DEFAULT_PORT "/dev/ttyS5" 	//set to telem1 port
+#define SP25_DEFAULT_PORT "/dev/ttyS3" 	//set to telem1 port
+
 #define SP25_HEADER		0xAA	//start seq, with 2 bytes->0xAA 0xAA|
 #define SP25_END		0x55	//end seq, with 2 bytes
 #define SP25_SENSOR_CONFIG	0x20
@@ -62,6 +63,7 @@ using namespace time_literals;
 #define SP25_TARGET_STATUS	0x70B	//OUTPUT
 #define SP25_TARGET_INFO	0x70C
 #define SP25_PACKET_NUM		8
+
 enum SP25_PARSE_STATE {
 	START_SEQ = 0,
 	MSG_ID,
@@ -76,7 +78,6 @@ enum sp25_pack_type_en {
 };
 
 struct sp25_package {
-	float range;
 	float vel;
 	uint8_t size;
 	uint8_t snr;
@@ -94,30 +95,25 @@ public:
 
 	int 				init();
 	void 				print_info();
-	void				start();
-	void				stop();
-
 
 private:
 
+	void				start();
+	void				stop();
 	void				Run() override;
 	int				collect();
 
-	int				SP25_parser(unsigned char c, char *parserbuf, unsigned *parserbuf_index);
+	int				SP25_parser(unsigned char c, char *parserbuf, unsigned *parserbuf_index, SP25_PARSE_STATE *state, float *dist);
 
 	char 				_port[20] {};
-	int         		        _interval{20000};
-	bool				_collect_phase{false};
+	int         		        _interval{20_ms};
 	PX4Rangefinder                  _px4_rangefinder;
 	int				_fd{-1};
-	char				_linebuf[8] {};
+	char				_linebuf[14] {};
 	unsigned			_linebuf_index{0};
 	enum SP25_PARSE_STATE		_parse_state{START_SEQ};
 
 	hrt_abstime			_last_read{0};
-	bool				_simple_serial{false};
-
-	unsigned			_consecutive_fail_count;
 
 	perf_counter_t			_sample_perf;
 	perf_counter_t			_comms_errors;

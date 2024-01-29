@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   Copyright (C) 2017-2023 Intel Corporation. All rights reserved.
+ *   Copyright (C) 2017-2024 Intel Corporation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -36,12 +36,17 @@
 #include <px4_platform_common/getopt.h>
 #include <px4_platform_common/module.h>
 
-namespace SP_25
+namespace sp25
 {
 
 SP25 *g_dev{nullptr};
 
-static int Start(const char *port, const uint8_t rotation)
+int start(const char *port, uint8_t rotation);
+int status();
+int stop();
+int usage();
+
+int start(const char *port, const uint8_t rotation)
 {
 	if (g_dev != nullptr) {
 		PX4_ERR("already started");
@@ -63,37 +68,37 @@ static int Start(const char *port, const uint8_t rotation)
 		return PX4_ERROR;
 	}
 
-	// Start the driver.
-	g_dev->start();
-
 	return PX4_OK;
 }
 
-static int status()
+int status()
 {
 	if (g_dev == nullptr) {
 		PX4_ERR("driver not running");
-		return PX4_ERROR;
+		return 1;
 	}
 
+	printf("state @ %p\n", g_dev);
 	g_dev->print_info();
 
-	return PX4_OK;
+	return 0;
 }
 
-static int Stop()
+int stop()
 {
 	if (g_dev != nullptr) {
 		delete g_dev;
 		g_dev = nullptr;
 
+	} else {
+		PX4_ERR("driver not running");
+		return 1;
 	}
 
-	PX4_INFO("driver stopped");
 	return PX4_OK;
 }
 
-static int usage()
+int usage()
 {
 	PRINT_MODULE_DESCRIPTION(
 		R"DESCR_STR(
@@ -104,16 +109,16 @@ Serial bus driver for the SP25 millimeter wave radar.
 ### Examples
 
 Attempt to start driver on a specified serial device.
-$ SP25 start -d /dev/ttyS1
+$ sp25 start -d /dev/ttyS1
 Stop driver
-$ SP25 stop
+$ sp25 stop
 )DESCR_STR");
 
 	PRINT_MODULE_USAGE_NAME("SP25", "driver");
 	PRINT_MODULE_USAGE_SUBCATEGORY("distance_sensor");
 	PRINT_MODULE_USAGE_COMMAND_DESCR("start", "Start driver");
 	PRINT_MODULE_USAGE_PARAM_STRING('d', nullptr, nullptr, "Serial device", false);
-	PRINT_MODULE_USAGE_PARAM_INT('r', 25, 0, 25, "Sensor rotation - frontward facing by default", true);
+	PRINT_MODULE_USAGE_PARAM_INT('r', 25, 0, 25, "Sensor rotation - downward facing by default", true);
 	PRINT_MODULE_USAGE_COMMAND_DESCR("stop", "Stop driver");
 	return PX4_OK;
 }
@@ -142,23 +147,23 @@ extern "C" __EXPORT int sp25_main(int argc, char *argv[])
 
 		default:
 			PX4_WARN("Unknown option");
-			return SP_25::usage();
+			return sp25::usage();
 		}
 	}
 
 	if (myoptind >= argc) {
-		return SP_25::usage();
+		return sp25::usage();
 	}
 
 	if (!strcmp(argv[myoptind], "start")) {
-		return SP_25::Start(port, rotation);
+		return sp25::start(port, rotation);
 
 	} else if (!strcmp(argv[myoptind], "status")) {
-		return SP_25::status();
+		return sp25::status();
 
 	} else if (!strcmp(argv[myoptind], "stop")) {
-		return SP_25::Stop();
+		return sp25::stop();
 	}
 
-	return SP_25::usage();
+	return sp25::usage();
 }

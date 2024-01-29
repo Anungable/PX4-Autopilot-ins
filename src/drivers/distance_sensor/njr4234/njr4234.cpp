@@ -36,11 +36,6 @@
 #include <lib/drivers/device/Device.hpp>
 #include <fcntl.h>
 
-//TODO: rm this structure and only keep range
-static njr4234_pack_s njr4234_pack {
-.range = 0, .vel = 0, .size = 0, .snr = 0, .pack_type = 0, .cmd1 = 0, .cmd2 = 0, .cmd3 = 0, .parser.decode_state = 0, .parser.header_msg = 0
-};
-
 NJR4234::NJR4234(const char *port, uint8_t rotation) :
 	ScheduledWorkItem(MODULE_NAME, px4::serial_port_to_wq(port)),
 	_px4_rangefinder(0, rotation)
@@ -77,12 +72,76 @@ int
 NJR4234::init()
 {
 	// TODO: 1. check the maximum distance calulation method 2. check the updating frequency to get _interval
-	_px4_rangefinder.set_min_distance(0.85f);
+	_px4_rangefinder.set_min_distance(1.9f);  //80MHz bandwidth
 	_px4_rangefinder.set_max_distance(20.0f);
 
-	start();
+	int ret = 0;
+	do {
+		_fd = ::open(_port, O_RDWR | O_NOCTTY);
+		if (_fd < 0) {
+			PX4_ERR("Error opening fd");
+			return -1;
+		}
 
-	return PX4_OK;
+		unsigned speed = B115200;
+		termios uart_config{};
+		int termios_state{};
+
+		tcgetattr(_fd, &uart_config);
+
+		// clear ONLCR flag (which appends a CR for every LF)
+		uart_config.c_oflag &= ~ONLCR;
+
+		// set baud rate
+		if ((termios_state = cfsetispeed(&uart_config, speed)) < 0) {
+			PX4_ERR("CFG: %d ISPD", termios_state);
+			ret = -1;
+			break;
+		}
+
+		if ((termios_state = cfsetospeed(&uart_config, speed)) < 0) {
+			PX4_ERR("CFG: %d OSPD\n", termios_state);
+			ret = -1;
+			break;
+		}
+
+		if ((termios_state = tcsetattr(_fd, TCSANOW, &uart_config)) < 0) {
+			PX4_ERR("baud %d ATTR", termios_state);
+			ret = -1;
+			break;
+		}
+
+		uart_config.c_cflag |= (CLOCAL | CREAD);	// ignore modem controls
+		uart_config.c_cflag &= ~CSIZE;			// turn off existing size setting in terminal settings
+		uart_config.c_cflag |= CS8;			// 8-bit characters (per byte)
+		uart_config.c_cflag &= ~PARENB;			// no parity bit
+		uart_config.c_cflag &= ~CSTOPB;			// only need 1 stop bit
+		uart_config.c_cflag &= ~CRTSCTS;		// no hardware flowcontrol
+
+		// setup for non-canonical mode
+		uart_config.c_iflag &= ~(IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL | IXON);
+		uart_config.c_lflag &= ~(ECHO | ECHONL | ICANON | ISIG | IEXTEN);
+		uart_config.c_oflag &= ~OPOST;
+
+		// fetch bytes as they become available
+		uart_config.c_cc[VMIN] = 1;
+		uart_config.c_cc[VTIME] = 1;
+
+		if (_fd < 0) {
+			PX4_ERR("FAIL: laser fd");
+			ret = -1;
+			break;
+		}
+
+	} while (0);
+
+	::close(_fd);
+	_fd = -1;
+	if (ret == PX4_OK) {
+		start();
+	}
+
+	return ret;
 }
 
 int
@@ -94,7 +153,7 @@ NJR4234::collect()
 	int64_t read_elapsed = hrt_elapsed_time(&_last_read);
 
 	// the buffer for read chars is buflen minus null termination
-	unsigned char readbuf[sizeof(_linebuf)] {};
+	char readbuf[sizeof(_linebuf)] {};
 	unsigned readlen = sizeof(readbuf) - 1;
 
 	int ret = 0;
@@ -161,7 +220,7 @@ NJR4234::collect()
 void
 NJR4234::start()
 {
-	ScheduleNow();
+	ScheduleOnInterval(_interval);
 }
 
 void
@@ -173,42 +232,17 @@ NJR4234::stop()
 void
 NJR4234::Run()
 {
-	if (_fd > 0 ) {
-		return;
-	}
+
 	if (_fd < 0) {
 		// open fd
 		_fd = ::open(_port, O_RDWR | O_NOCTTY);
 	}
 
-	struct termios uart_config;
-
-	int termios_state;
-
-	/* fill the struct for the new configuration */
-	tcgetattr(_fd, &uart_config); //to access the termios structure
-
-	/* clear ONLCR flag (which appends a CR for every LF) */
-	uart_config.c_oflag &= ~ONLCR; //turn off the conversion of newline characters to carriage return and newline \r\n
-
-	/* no parity, only 1 stop bit, no hardware flow control */
-	uart_config.c_cflag &= ~(PARENB | CSTOPB | CRTSCTS);
-
-	/* ignore modem control lines and enable receiver (allow to read) */
-	uart_config.c_cflag |= (CLOCAL | CREAD);
-
-	unsigned speed = B115200;
-	/* set baud rate */
-	if ((termios_state = cfsetispeed(&uart_config, speed)) < 0) {
-		PX4_ERR("CFG: %d ISPD", termios_state);
-	}
-
-	if ((termios_state = cfsetospeed(&uart_config, speed)) < 0) {
-		PX4_ERR("CFG: %d OSPD", termios_state);
-	}
-
-	if ((termios_state = tcsetattr(_fd, TCSANOW, &uart_config)) < 0) {
-		PX4_ERR("baud %d ATTR", termios_state);
+	if (collect() == -EAGAIN) {
+		//reschedule to grab missing bits, time to transmit @115200bps
+		ScheduleClear();
+		ScheduleOnInterval(_interval);
+		return;
 	}
 }
 
@@ -223,16 +257,16 @@ NJR4234::print_info()
 /**
  * @brief NJR4234 message decoder
  */
-int  NJR4234_parser(unsigned char c, char *parserbuf, unsigned *parserbuf_index, NJR4234_PARSE_STATE *state, float *dist)
+int
+NJR4234::NJR4234_parser(unsigned char c, char *parserbuf, unsigned *parserbuf_index, NJR4234_PARSE_STATE *state, float *dist)
 {
 	int ret = -1;
 
 	switch (*state)
 	{
-		case PREAMBLE:
+		case NJR4234_PARSE_STATE::PREAMBLE:
 			// check 4 bytes preamble 0xCC|CC|55|55
-
-			*parserbuf_index++;
+			(*parserbuf_index)++;
 			if(c == 0xCC && (*parserbuf_index == 1 || *parserbuf_index == 2))
 			{ }
 			else if(c == 0x55 && *parserbuf_index == 3)
@@ -240,24 +274,24 @@ int  NJR4234_parser(unsigned char c, char *parserbuf, unsigned *parserbuf_index,
 			else if(c == 0x55 && *parserbuf_index == 4)
 			{
 				*parserbuf_index = 0;
-				*state = HEADER;
+				*state = NJR4234_PARSE_STATE::HEADER;
 			}
 			else
 			{
 				*parserbuf_index = 0;
 			}
 			break;
-		case HEADER:
+		case NJR4234_PARSE_STATE::HEADER:
 			if(*parserbuf_index == 0)
 			{
-				*parserbuf_index++;
+				(*parserbuf_index)++;
 				if(c == OUTDATA_HEADER1_MEAS_DIST)
 				{
 					_header_msg = 0;
 				}
 				else if(c == RUNCMD_HEADER)
 				{
-					*state = COMMAND;
+					*state = NJR4234_PARSE_STATE::COMMAND;
 					*parserbuf_index = 0;
 				}
 				else if(c == READ_ALL_PARAM_HEADER1)
@@ -267,13 +301,13 @@ int  NJR4234_parser(unsigned char c, char *parserbuf, unsigned *parserbuf_index,
 			}
 			else if(*parserbuf_index >= 1)
 			{
-				*parserbuf_index++;
+				(*parserbuf_index)++;
 				if(((c & 0x02) == OUTDATA_HEADER2_STATIONARY && _header_msg == 0) || _header_msg == 1)
 				{
 					_header_msg = 1;
 					if(*parserbuf_index == 4)
 					{
-						*state = STATIONARY_OBJ;
+						*state = NJR4234_PARSE_STATE::STATIONARY_OBJ;
 						*parserbuf_index = 0;
 					}
 				}
@@ -282,7 +316,7 @@ int  NJR4234_parser(unsigned char c, char *parserbuf, unsigned *parserbuf_index,
 					_header_msg = 2;
 					if(*parserbuf_index == 4)
 					{
-						*state = MOVING_OBJ;
+						*state = NJR4234_PARSE_STATE::MOVING_OBJ;
 						*parserbuf_index = 0;
 					}
 				}
@@ -294,19 +328,19 @@ int  NJR4234_parser(unsigned char c, char *parserbuf, unsigned *parserbuf_index,
 					}
 					else if(*parserbuf_index == 4)
 					{
-						*state = ALL_PARAM;
+						*state = NJR4234_PARSE_STATE::ALL_PARAM;
 						*parserbuf_index = 0;
 					}
 				}
 				else
 				{
-					*state = PREAMBLE;
+					*state = NJR4234_PARSE_STATE::PREAMBLE;
 					*parserbuf_index = 0;
 				}
 			}
 			break;
-		case COMMAND:
-			*parserbuf_index++;
+		case NJR4234_PARSE_STATE::COMMAND:
+			(*parserbuf_index)++;
 			if(*parserbuf_index == 1)
 			{ }
 			else if(*parserbuf_index == 2)
@@ -314,38 +348,38 @@ int  NJR4234_parser(unsigned char c, char *parserbuf, unsigned *parserbuf_index,
 			else
 			{
 				*parserbuf_index = 0;
-				*state = PREAMBLE;
+				*state = NJR4234_PARSE_STATE::PREAMBLE;
 			}
 			break;
-		case ALL_PARAM:
-			*parserbuf_index++;
+		case NJR4234_PARSE_STATE::ALL_PARAM:
+			(*parserbuf_index)++;
 			if(*parserbuf_index == 23)
 			{
 				*parserbuf_index = 0;
-				*state = PREAMBLE;
+				*state = NJR4234_PARSE_STATE::PREAMBLE;
 			}
 			break;
-		case STATIONARY_OBJ:
-			*parserbuf_index++;
+		case NJR4234_PARSE_STATE::STATIONARY_OBJ:
+			(*parserbuf_index)++;
 			if(*parserbuf_index == 28)
 			{
 				*parserbuf_index = 0;
-				*state = PREAMBLE;
+				*state = NJR4234_PARSE_STATE::PREAMBLE;
 			}
 			break;
-		case MOVING_OBJ:
-			*parserbuf_index++;
+		case NJR4234_PARSE_STATE::MOVING_OBJ:
+			(*parserbuf_index)++;
 			if(*parserbuf_index <= 8)
 			{
-				*parserbuf[*parserbuf_index - 1] = c;
+				parserbuf[*parserbuf_index - 1] = c;
 			}
 			if(*parserbuf_index == 8)
 			{
-				uint16_t tmp_val = *parserbuf[0] << 8;
-				tmp_val |= *parserbuf[1];
+				uint16_t tmp_val = parserbuf[0] << 8;
+				tmp_val |= parserbuf[1];
 				*dist = ((float) tmp_val) * 0.01f;
 				*parserbuf_index = 0;
-				*state = PREAMBLE;
+				*state = NJR4234_PARSE_STATE::PREAMBLE;
 				ret = 0;
 			}
 			break;

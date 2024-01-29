@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   Copyright (c) 2017-2019 PX4 Development Team. All rights reserved.
+ *   Copyright (c) 2017-2024 PX4 Development Team. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -31,17 +31,17 @@
  *
  ****************************************************************************/
 
-#include "TFMINI.hpp"
+#include "njr4234.hpp"
 
 #include <px4_platform_common/getopt.h>
 
 /**
  * Local functions in support of the shell command.
  */
-namespace tfmini
+namespace njr4234
 {
 
-TFMINI	*g_dev{nullptr};
+NJR4234	*g_dev{nullptr};
 
 int start(const char *port, uint8_t rotation);
 int status();
@@ -57,7 +57,7 @@ start(const char *port, uint8_t rotation)
 	}
 
 	// Instantiate the driver.
-	g_dev = new TFMINI(port, rotation);
+	g_dev = new NJR4234(port, rotation);
 
 	if (g_dev == nullptr) {
 		PX4_ERR("driver start failed");
@@ -111,21 +111,19 @@ usage()
 		R"DESCR_STR(
 ### Description
 
-Serial bus driver for the Benewake TFmini LiDAR.
+Serial bus driver for the JRC NJR4234 microwave distance measurement sensor module.
 
-Most boards are configured to enable/start the driver on a specified UART using the SENS_TFMINI_CFG parameter.
-
-Setup/usage information: https://docs.px4.io/main/en/sensor/tfmini.html
+Most boards are configured to enable/start the driver on a specified UART using the SENS_NJR4234_CFG parameter.
 
 ### Examples
 
 Attempt to start driver on a specified serial device.
-$ tfmini start -d /dev/ttyS1
+$ njr4234 start -d /dev/ttyS1
 Stop driver
-$ tfmini stop
+$ njr4234 stop
 )DESCR_STR");
 
-	PRINT_MODULE_USAGE_NAME("tfmini", "driver");
+	PRINT_MODULE_USAGE_NAME("njr4234", "driver");
 	PRINT_MODULE_USAGE_SUBCATEGORY("distance_sensor");
 	PRINT_MODULE_USAGE_COMMAND_DESCR("start","Start driver");
 	PRINT_MODULE_USAGE_PARAM_STRING('d', nullptr, nullptr, "Serial device", false);
@@ -139,11 +137,11 @@ $ tfmini stop
 
 } // namespace
 
-extern "C" __EXPORT int tfmini_main(int argc, char *argv[])
+extern "C" __EXPORT int njr4234_main(int argc, char *argv[])
 {
 	int ch = 0;
-	uint8_t rotation = distance_sensor_s::ROTATION_DOWNWARD_FACING;
-	const char *device_path = TFMINI_DEFAULT_PORT;
+	uint8_t rotation = distance_sensor_s::ROTATION_FORWARD_FACING;
+	const char *device_path = NJR4234_DEFAULT_PORT;
 	int myoptind = 1;
 	const char *myoptarg = nullptr;
 
@@ -165,24 +163,24 @@ extern "C" __EXPORT int tfmini_main(int argc, char *argv[])
 
 	if (myoptind >= argc) {
 		PX4_ERR("unrecognized command");
-		return tfmini::usage();
+		return njr4234::usage();
 	}
 
 	if (!strcmp(argv[myoptind], "start")) {
 		if (strcmp(device_path, "") != 0) {
-			return tfmini::start(device_path, rotation);
+			return njr4234::start(device_path, rotation);
 
 		} else {
 			PX4_WARN("Please specify device path!");
-			return tfmini::usage();
+			return njr4234::usage();
 		}
 
 	} else if (!strcmp(argv[myoptind], "stop")) {
-		return tfmini::stop();
+		return njr4234::stop();
 
 	} else if (!strcmp(argv[myoptind], "status")) {
-		return tfmini::status();
+		return njr4234::status();
 	}
 
-	return tfmini::usage();
+	return njr4234::usage();
 }
